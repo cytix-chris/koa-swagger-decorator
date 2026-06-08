@@ -63,6 +63,15 @@ declare namespace Components {
             id: string | null;
             message: string | null;
         }
+        export interface UserControllerUploadUserAvatarBodyRequest {
+            uid: string;
+            fileName: string;
+        }
+        export interface UserControllerUploadUserAvatarResponse {
+            uid: string;
+            uploaded: boolean;
+            url: string;
+        }
     }
 }
 declare namespace Paths {
@@ -123,6 +132,12 @@ declare namespace Paths {
             export type $200 = Components.Schemas.UserControllerUpdateUserResponse;
         }
     }
+    namespace UploadUserAvatar {
+        export type RequestBody = Components.Schemas.UserControllerUploadUserAvatarBodyRequest;
+        namespace Responses {
+            export type $200 = Components.Schemas.UserControllerUploadUserAvatarResponse;
+        }
+    }
 }
 
 export interface OperationMethods {
@@ -162,6 +177,14 @@ export interface OperationMethods {
     data?: Paths.UpdateUser.RequestBody,
     config?: AxiosRequestConfig  
   ): OperationResponse<Paths.UpdateUser.Responses.$200>
+    /**
+     * UploadUserAvatar
+     */
+    'UploadUserAvatar'(
+        parameters?: Parameters<UnknownParamsObject> | null,
+        data?: Paths.UploadUserAvatar.RequestBody,
+        config?: AxiosRequestConfig
+    ): OperationResponse<Paths.UploadUserAvatar.Responses.$200>
 }
 
 export interface PathsDictionary {
@@ -209,6 +232,16 @@ export interface PathsDictionary {
   }
   ['/demo']: {
   }
+    ['/users/avatar']: {
+        /**
+         * UploadUserAvatar
+         */
+        'post'(
+            parameters?: Parameters<UnknownParamsObject> | null,
+            data?: Paths.UploadUserAvatar.RequestBody,
+            config?: AxiosRequestConfig
+        ): OperationResponse<Paths.UploadUserAvatar.Responses.$200>
+    }
 }
 
 export type Client = OpenAPIClient<OperationMethods, PathsDictionary>

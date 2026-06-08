@@ -38,6 +38,10 @@ const CreateUserRes = z.object({
   message: z.string().nullable(),
 });
 
+const ErrorResponse = z.object({
+  message: z.string(),
+});
+
 const UpdateUserReq = z.object({
   id: z.string().nonempty(),
   name: z.string().nullable(),
@@ -49,6 +53,17 @@ const UpdateUserRes = z.object({
   message: z.string().nullable(),
 });
 
+const UploadAvatarReq = z.object({
+  uid: z.string().nonempty(),
+  fileName: z.string().nonempty(),
+});
+
+const UploadAvatarRes = z.object({
+  uid: z.string().nonempty(),
+  uploaded: z.boolean(),
+  url: z.string().url(),
+});
+
 export {
   UserStruct,
   GetUserByIdRequest,
@@ -56,9 +71,12 @@ export {
   CreateUserReq,
   UpdateUserReq,
   CreateUserRes,
+  ErrorResponse,
   UpdateUserRes,
   ListUserResponse,
   ListUsersRequest,
+  UploadAvatarReq,
+  UploadAvatarRes,
 };
 
 export type IGetUserByIdResponse = z.infer<typeof GetUserByIdResponse>;
@@ -66,3 +84,4 @@ export type ICreateUserRes = z.infer<typeof CreateUserRes>;
 export type ICreateUserReq = z.infer<typeof CreateUserReq>;
 export type IListUserRes = z.infer<typeof ListUserResponse>;
 export type IListUserReq = z.infer<typeof ListUsersRequest>;
+export type ICreateAvatarRes = z.infer<typeof UploadAvatarRes>;

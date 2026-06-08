@@ -17,6 +17,7 @@ describe("SwaggerRouter", () => {
     });
     const docs = prepareDocs();
     expect(docs.info.title).toBe("TEST_TITLE");
+    expect(docs.openapi).toBe("3.1.0");
   });
 
   test("#init SwaggerRouter with custom swagger endpoint", () => {

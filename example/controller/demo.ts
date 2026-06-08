@@ -1,14 +1,22 @@
-import { ItemMeta, z } from "../../lib";
-import { middlewares, responses, routeConfig } from "../../lib/decorator";
+import { ItemMeta, z } from "../../lib/index";
+import {
+  classRouteConfig,
+  middlewares,
+  responses,
+  routeConfig,
+} from "../../lib/decorator";
 import { Context } from "koa";
 import { AUTH_KEY } from "../schemas/extra";
 
+@classRouteConfig({
+  path: "/v1",
+  tags: ["DEMO"],
+})
 export class DemoController {
   @routeConfig({
     path: "/demo",
     method: "get",
     security: [{ [AUTH_KEY]: [] }],
-    tags: ["DEMO"],
     request: {
       query: z.object({
         xxx: z.string().nullable().openapi({

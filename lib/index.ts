@@ -13,6 +13,7 @@ export interface ParsedArgs<T> {
 }
 
 export { z, registry };
+export { generateOpenAPIDocument, prepareDocs } from "./swagger-builder";
 
 export * from "./decorator";
 export * from "./swagger-router";

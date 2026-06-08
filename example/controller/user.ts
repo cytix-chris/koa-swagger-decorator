@@ -1,8 +1,17 @@
 import { Context } from "koa";
-import { body, middlewares, responses, routeConfig } from "../../lib/decorator";
+import {
+  body,
+  classRouteConfig,
+  formData,
+  middlewares,
+  responses,
+  routeConfig,
+} from "../../lib/decorator";
 import {
   CreateUserReq,
   CreateUserRes,
+  ErrorResponse,
+  ICreateAvatarRes,
   GetUserByIdResponse,
   ICreateUserRes,
   IGetUserByIdResponse,
@@ -10,12 +19,18 @@ import {
   IListUserRes,
   ListUserResponse,
   ListUsersRequest,
+  UploadAvatarReq,
+  UploadAvatarRes,
   UpdateUserReq,
   UpdateUserRes,
 } from "../schemas/user";
-import { ParsedArgs, z } from "../../lib";
+import { ParsedArgs, z } from "../../lib/index";
 import { AUTH_KEY } from "../schemas/extra";
 
+@classRouteConfig({
+  path: "/v1",
+  tags: ["USER"],
+})
 class UserController {
   @routeConfig({
     method: "get",
@@ -64,7 +79,6 @@ class UserController {
     method: "post",
     path: "/users",
     summary: "创建用户",
-    tags: ["USER"],
     security: [{ [AUTH_KEY]: [] }],
     operationId: "CreateUser",
   })
@@ -78,9 +92,19 @@ class UserController {
     },
   ])
   @body(CreateUserReq)
-  @responses(CreateUserRes)
+  @responses({
+    "201": {
+      schema: CreateUserRes,
+      description: "created",
+    },
+    "400": {
+      schema: ErrorResponse,
+      description: "invalid request",
+    },
+  })
   async CreateUser(ctx: Context) {
     console.log(ctx.request.body);
+    ctx.status = 201;
     ctx.body = { message: "create", id: "123" } as ICreateUserRes;
   }
 
@@ -95,6 +119,36 @@ class UserController {
     console.log(ctx.request.body);
     type IUpdateUserRes = z.infer<typeof UpdateUserRes>;
     ctx.body = { message: "updated", id: "123" } as IUpdateUserRes;
+  }
+
+  @routeConfig({
+    path: "/users/avatar",
+    method: "post",
+    operationId: "UploadUserAvatar",
+  })
+  @formData(UploadAvatarReq)
+  @responses({
+    "200": UploadAvatarRes,
+    "400": {
+      schema: ErrorResponse,
+      description: "invalid form data",
+    },
+  })
+  async UploadUserAvatar(ctx: Context) {
+    const body = ctx.request.body as Record<string, string>;
+    if (!body?.uid || !body?.fileName) {
+      ctx.status = 400;
+      ctx.body = {
+        message: "uid and fileName are required",
+      };
+      return;
+    }
+
+    ctx.body = {
+      uid: body.uid,
+      uploaded: true,
+      url: `https://cdn.example.com/avatar/${body.uid}/${body.fileName}`,
+    } as ICreateAvatarRes;
   }
 }
 

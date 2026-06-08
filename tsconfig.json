@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "lib": ["ESNext"],
-    "module": "CommonJS",
+    "module": "NodeNext",
     "target": "esnext",
     "declaration": true,
     "experimentalDecorators": true,
@@ -9,11 +9,10 @@
     "esModuleInterop": true,
     "inlineSourceMap": true,
     "outDir": "dist",
-    "moduleResolution": "Node",
+    "moduleResolution": "NodeNext",
     "strict": true,
     "skipLibCheck": true,
     "noImplicitAny": false,
-    "downlevelIteration": true,
     "jsx": "preserve",
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,

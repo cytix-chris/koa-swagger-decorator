@@ -2,7 +2,7 @@ import OpenAPIClientAxios from "openapi-client-axios";
 import { Client } from "./openapi";
 import common from "../config";
 const api = new OpenAPIClientAxios({
-  definition: "http://localhost:3000/api/swagger-json",
+  definition: `${common.baseUrl}/api/swagger-json`,
   axiosConfigDefaults: {
     baseURL: common.baseUrl,
   },
@@ -17,7 +17,16 @@ async function createPet() {
       headers: { Authorization: "aa" },
     }
   );
-  console.log("response", ret.data);
+  console.log("status", ret.status, "response", ret.data);
 }
 
-createPet();
+async function uploadAvatar() {
+  const client = await api.getClient<Client>();
+  const ret = await client.UploadUserAvatar(null, {
+    uid: "aa",
+    fileName: "avatar.png",
+  });
+  console.log("upload", ret.status, ret.data);
+}
+
+createPet().then(uploadAvatar);

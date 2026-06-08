@@ -29,10 +29,10 @@ V2 version has undergone complete refactoring, introducing break change and new 
 
 ## Introduction
 
-Developing your type-safe API using simple decorators and zod schema with auto-generated OpenAPI docs based on [OpenAPI V3](https://swagger.io/specification/).
+Developing your type-safe API using simple decorators and zod schema with auto-generated OpenAPI docs based on [OpenAPI V3.1](https://swagger.io/specification/).
 
 - use [zod schema](https://github.com/colinhacks/zod) to define and validate Request/Response objects.
-- use [zod-to-openapi](https://github.com/asteasolutions/zod-to-openapi) to convert zod schema into [OpenAPI V3](https://swagger.io/specification/) schemas.
+- use [zod-to-openapi](https://github.com/asteasolutions/zod-to-openapi) to convert zod schema into [OpenAPI V3.1](https://swagger.io/specification/) schemas.
 - use [@koa/router](https://github.com/koajs/router) to register routes & api handler to Koa application.
 
 ## Usage
@@ -228,6 +228,73 @@ define params by adding @body/@responses decorators to your handler
   @responses([ZodSchema])
 ```
 
+define multipart request body by using `@formData`
+
+```typescript
+  @routeConfig({
+    path: "/users/avatar",
+    method: "post",
+    tags: ["USER"],
+  })
+  @formData(
+    z.object({
+      // usually string/binary for upload field description
+      file: z.string(),
+    })
+  )
+```
+
+define non-200 responses by status code map
+
+```typescript
+  @responses({
+    "201": z.object({ id: z.string() }),
+    "400": {
+      schema: z.object({ message: z.string() }),
+      description: "bad request",
+    },
+  })
+```
+
+### Using Class Decorator
+
+Use `@classRouteConfig` for controller-level defaults:
+
+- set class base path
+- set shared tags/security
+- set class-level middlewares
+
+```typescript
+@classRouteConfig({
+  path: "/v1",
+  tags: ["USER"],
+})
+class UserController {
+  @routeConfig({ path: "/users", method: "get" })
+  async ListUsers(ctx: Context) {
+    ctx.body = [];
+  }
+}
+```
+
+### Generate OpenAPI Docs Without Running App
+
+You can generate docs in build scripts/CI without starting Koa:
+
+```typescript
+import { generateOpenAPIDocument } from "koa-swagger-decorator";
+
+const docs = generateOpenAPIDocument({
+  openapi: "3.1.0",
+  spec: {
+    info: {
+      title: "My API",
+      version: "1.0.0",
+    },
+  },
+});
+```
+
 ### Using router.prefix
 
 ```typescript
@@ -259,9 +326,9 @@ using @middlewares decorator for your handler method
 - [ ] support response validation
 - [x] support middleware decorator
 - [x] support adding exist components to spec
-- [ ] support generate openapi docs without starting app
-- [ ] add unit test
-- [ ] support form-data request
-- [ ] support define non-200 responses
-- [ ] support class decorators
+- [x] support generate openapi docs without starting app
+- [x] add unit test
+- [x] support form-data request
+- [x] support define non-200 responses
+- [x] support class decorators
 

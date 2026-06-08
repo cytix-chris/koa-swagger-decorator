@@ -1,122 +1,277 @@
 import {
   OpenApiGeneratorV3,
+  OpenApiGeneratorV31,
+  OpenAPIRegistry,
   RouteConfig,
 } from "@asteasolutions/zod-to-openapi";
+import { ZodTypeAny } from "zod";
+import deepmerge from "deepmerge";
 import { registry } from "./registry";
 import { Container } from "./utils/container";
 import {
   CONFIG_SYMBOL,
   DECORATOR_REQUEST,
   DECORATOR_SCHEMAS,
+  getClassMetaKey,
 } from "./utils/constant";
-import deepmerge from "deepmerge";
+import {
+  ClassRouteConfig,
+  ResponseSchemaConfig,
+  ResponsesDecoratorInput,
+} from "./decorator";
+
+type BodyDecoratorMeta = {
+  schema: ZodTypeAny;
+  contentType: string;
+};
+
+export interface PrepareDocsOptions {
+  prefix?: string;
+  spec?: Record<string, any>;
+  openapi?: "3.0.0" | "3.1.0";
+}
+
+function isZodSchema(input: unknown): input is ZodTypeAny {
+  return !!input && typeof (input as ZodTypeAny).safeParse === "function";
+}
+
+function normalizeRefStatusCode(statusCode: string) {
+  return statusCode.replace(/[^a-zA-Z0-9]/g, "_");
+}
+
+function getClassRouteConfig(identifier: string): ClassRouteConfig {
+  const className = identifier.split("-")[0];
+  return (Container.get(getClassMetaKey(className)) as ClassRouteConfig) ?? {};
+}
+
+function joinPath(...paths: string[]) {
+  const segments = paths
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => item.replace(/(^\/+|\/+?$)/g, ""));
+  return `/${segments.join("/")}`.replace(/\/+/g, "/");
+}
+
+function getResponseDescription(statusCode: string) {
+  if (statusCode.startsWith("2")) {
+    return "success";
+  }
+  return `HTTP ${statusCode} response`;
+}
 
 function handleRouteConfig(routeConfig: RouteConfig, identifier: string) {
   const meta =
     (Container.get(`DECORATOR_MERGE_${identifier}`) as Partial<RouteConfig>) ??
     {};
+  const classMeta = getClassRouteConfig(identifier);
 
   if (!meta.operationId) {
-    // set default operationId
     meta.operationId = identifier;
   }
+
   const obj = {
     ...meta,
   };
   delete obj.path;
   delete obj.method;
-  return deepmerge(routeConfig, obj);
 
+  const mergedConfig = deepmerge(routeConfig, obj);
+
+  if (classMeta.tags?.length) {
+    const tags = [...classMeta.tags, ...(mergedConfig.tags ?? [])];
+    mergedConfig.tags = [...new Set(tags)];
+  }
+
+  if (classMeta.security?.length) {
+    mergedConfig.security = [
+      ...classMeta.security,
+      ...(mergedConfig.security ?? []),
+    ];
+  }
+
+  return mergedConfig;
 }
 
-function handleSchemas() {
+function handleSchemas(docRegistry: OpenAPIRegistry) {
   const meta = Container.get(DECORATOR_SCHEMAS);
   if (meta) {
     for (const o of meta) {
-      registry.register(o.refId, o.zodSchema);
+      docRegistry.register(o.refId, o.zodSchema);
     }
   }
 }
 
-function handleBody(routeConfig: RouteConfig, identifier: string) {
-  const bodyMeta = Container.get(`DECORATOR_BODY_${identifier}`);
-  if (bodyMeta) {
-    registry.register(`${identifier}BodyRequest`, bodyMeta);
-    const bodyConfig = {
-      body: {
-        content: {
-          "application/json": {
-            schema: {
-              $ref: `#/components/schemas/${identifier}BodyRequest`,
-            },
+function handleBody(
+  routeConfig: RouteConfig,
+  identifier: string,
+  docRegistry: OpenAPIRegistry
+) {
+  const bodyMeta = Container.get(`DECORATOR_BODY_${identifier}`) as
+    | BodyDecoratorMeta
+    | undefined;
+
+  if (!bodyMeta) {
+    return;
+  }
+
+  docRegistry.register(`${identifier}BodyRequest`, bodyMeta.schema);
+
+  routeConfig.request = {
+    ...routeConfig.request,
+    body: {
+      content: {
+        [bodyMeta.contentType]: {
+          schema: {
+            $ref: `#/components/schemas/${identifier}BodyRequest`,
           },
         },
       },
-    };
-    routeConfig.request = {
-      ...routeConfig.request,
-      ...bodyConfig,
-    };
-  }
+    },
+  };
 }
 
-function handleResponse(routeConfig: RouteConfig, identifier: string) {
-  const responsesMeta = Container.get(`DECORATOR_RESPONSES_${identifier}`);
-  if (responsesMeta) {
-    // TODO 处理非 200 状态码
-    registry.register(`${identifier}Response`, responsesMeta);
-    const responsesConfig = {
-      responses: {
-        "200": {
-          description: "success",
-          content: {
-            "application/json": {
-              schema: {
-                $ref: `#/components/schemas/${identifier}Response`,
-              },
-            },
+function toResponseConfig(
+  statusCode: string,
+  responseMeta: ResponseSchemaConfig,
+  identifier: string,
+  docRegistry: OpenAPIRegistry
+) {
+  let schema: ZodTypeAny;
+  let contentType = "application/json";
+  let description = getResponseDescription(statusCode);
+
+  if (isZodSchema(responseMeta)) {
+    schema = responseMeta;
+  } else {
+    schema = responseMeta.schema;
+    contentType = responseMeta.contentType ?? contentType;
+    description = responseMeta.description ?? description;
+  }
+
+  const suffix = statusCode === "200" ? "" : `_${normalizeRefStatusCode(statusCode)}`;
+  const schemaRef = `${identifier}Response${suffix}`;
+
+  docRegistry.register(schemaRef, schema);
+
+  return {
+    [statusCode]: {
+      description,
+      content: {
+        [contentType]: {
+          schema: {
+            $ref: `#/components/schemas/${schemaRef}`,
           },
         },
       },
-    };
-    routeConfig.responses = {
-      ...routeConfig.responses,
-      ...responsesConfig.responses,
-    };
-  }
+    },
+  };
 }
-export function prepareDocs(prefix?: string) {
+
+function handleResponse(
+  routeConfig: RouteConfig,
+  identifier: string,
+  docRegistry: OpenAPIRegistry
+) {
+  const responsesMeta = Container.get(
+    `DECORATOR_RESPONSES_${identifier}`
+  ) as ResponsesDecoratorInput | undefined;
+
+  if (!responsesMeta) {
+    return;
+  }
+
+  const responsesConfig = isZodSchema(responsesMeta)
+    ? toResponseConfig("200", responsesMeta, identifier, docRegistry)
+    : Object.entries(responsesMeta).reduce(
+        (acc, [statusCode, responseConfig]) => ({
+          ...acc,
+          ...toResponseConfig(
+            statusCode,
+            responseConfig,
+            identifier,
+            docRegistry
+          ),
+        }),
+        {}
+      );
+
+  routeConfig.responses = {
+    ...routeConfig.responses,
+    ...responsesConfig,
+  };
+}
+
+function resolvePrepareOptions(prefixOrOptions?: string | PrepareDocsOptions) {
+  if (!prefixOrOptions) {
+    return {} as PrepareDocsOptions;
+  }
+
+  if (typeof prefixOrOptions === "string") {
+    return {
+      prefix: prefixOrOptions,
+    } as PrepareDocsOptions;
+  }
+
+  return prefixOrOptions;
+}
+
+export function prepareDocs(prefixOrOptions?: string | PrepareDocsOptions) {
+  const options = resolvePrepareOptions(prefixOrOptions);
+  const docRegistry = new OpenAPIRegistry([registry]);
+
   const apiList = Container.has(DECORATOR_REQUEST)
     ? Container.get(DECORATOR_REQUEST)
     : [];
+
   for (const { method, path, identifier } of apiList) {
-    const routePath = prefix ? `${prefix}${path}` : path;
+    const classMeta = getClassRouteConfig(identifier);
+    const routePath = joinPath(options.prefix ?? "", classMeta.path ?? "", path);
+
     const routeConfig: RouteConfig = {
       path: routePath,
       method,
       request: {},
       responses: {
         "200": {
-          description: "成功响应",
+          description: "success",
         },
       },
     };
 
-    handleBody(routeConfig, identifier);
-    handleResponse(routeConfig, identifier);
-    handleSchemas();
+    handleBody(routeConfig, identifier, docRegistry);
+    handleResponse(routeConfig, identifier, docRegistry);
+    handleSchemas(docRegistry);
 
-    // 注册 swagger 路由
-    registry.registerPath(handleRouteConfig(routeConfig, identifier));
+    docRegistry.registerPath(handleRouteConfig(routeConfig, identifier));
   }
-  const g = new OpenApiGeneratorV3(registry.definitions);
-  const spec = Container.get(CONFIG_SYMBOL).spec ?? {};
-  return g.generateDocument({
-    openapi: "3.0.0",
+
+  const config = (Container.get(CONFIG_SYMBOL) ?? {}) as Record<string, any>;
+  const spec = options.spec ?? config.spec ?? {};
+  const openapi = options.openapi ?? config.openapi ?? "3.1.0";
+
+  if (openapi === "3.0.0") {
+    const generator = new OpenApiGeneratorV3(docRegistry.definitions);
+    return generator.generateDocument({
+      openapi,
+      info: {
+        version: "1.0",
+        title: "Swagger OpenAPI",
+      },
+      ...spec,
+    });
+  }
+
+  const generator = new OpenApiGeneratorV31(docRegistry.definitions);
+  return generator.generateDocument({
+    openapi: "3.1.0",
     info: {
       version: "1.0",
       title: "Swagger OpenAPI",
     },
     ...spec,
   });
+}
+
+export function generateOpenAPIDocument(options?: PrepareDocsOptions) {
+  return prepareDocs(options);
 }

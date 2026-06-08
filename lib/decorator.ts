@@ -1,18 +1,59 @@
-import { ZodObject } from "zod";
+import { ZodTypeAny } from "zod";
 import { Container } from "./utils/container";
-import { DECORATOR_REQUEST, getIdentifier } from "./utils/constant";
+import {
+  DECORATOR_REQUEST,
+  getClassMetaKey,
+  getIdentifier,
+} from "./utils/constant";
 import { RouteConfig } from "@asteasolutions/zod-to-openapi";
 
+export type DecoratorBodyOptions = {
+  contentType?: string;
+};
+
+export type ResponseSchemaConfig =
+  | ZodTypeAny
+  | {
+      schema: ZodTypeAny;
+      description?: string;
+      contentType?: string;
+    };
+
+export type ResponsesDecoratorInput =
+  | ZodTypeAny
+  | Record<string, ResponseSchemaConfig>;
+
+export interface ClassRouteConfig {
+  path?: string;
+  tags?: string[];
+  security?: RouteConfig["security"];
+  middlewares?: Function[];
+}
+
 const body =
-  (v: ZodObject<any>) =>
+  (v: ZodTypeAny, options: DecoratorBodyOptions = {}) =>
   (target: any, name: string, descriptor: PropertyDescriptor) => {
-    descriptor.value.bodySchema = v;
-    Container.set(`DECORATOR_BODY_${getIdentifier(target, name)}`, v);
+    const bodyMeta = {
+      schema: v,
+      contentType: options.contentType ?? "application/json",
+    };
+    descriptor.value.bodySchema = bodyMeta;
+    Container.set(`DECORATOR_BODY_${getIdentifier(target, name)}`, bodyMeta);
     return descriptor;
   };
 
+const formData =
+  (v: ZodTypeAny) =>
+  (target: any, name: string, descriptor: PropertyDescriptor) => {
+    return body(v, { contentType: "multipart/form-data" })(
+      target,
+      name,
+      descriptor
+    );
+  };
+
 const responses =
-  (v: ZodObject<any>) =>
+  (v: ResponsesDecoratorInput) =>
   (target: any, name: string, descriptor: PropertyDescriptor) => {
     descriptor.value.responsesSchema = v;
     Container.set(`DECORATOR_RESPONSES_${getIdentifier(target, name)}`, v);
@@ -54,4 +95,19 @@ const routeConfig =
     return descriptor;
   };
 
-export { body, responses, routeConfig, middlewares };
+const classRouteConfig =
+  (v: ClassRouteConfig) =>
+  (target: any) => {
+    const className = target.name;
+    Container.set(getClassMetaKey(className), v);
+    return target;
+  };
+
+export {
+  body,
+  classRouteConfig,
+  formData,
+  responses,
+  routeConfig,
+  middlewares,
+};

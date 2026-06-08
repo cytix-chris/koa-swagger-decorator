@@ -11,6 +11,10 @@ export function getIdentifier(target: any, methodName: string) {
   return identifier;
 }
 
+export function getClassMetaKey(className: string) {
+  return `DECORATOR_CLASS_${className}`;
+}
+
 export function convertPath(path: string) {
   const re = new RegExp("{(.*?)}", "g");
   return path.replace(re, ":$1");
